@@ -1,0 +1,6 @@
+{
+  "name": "SakhiRide - Women Bike Taxi Service",
+  "description": "Safe, swift, and empowering two-wheeler mobility for women, ridden exclusively by verified women captains with multi-tier emergency security and live tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
