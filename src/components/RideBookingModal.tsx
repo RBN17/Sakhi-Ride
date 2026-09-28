@@ -25,6 +25,7 @@ interface RideBookingModalProps {
   initialPickup?: LocationOption;
   initialDropoff?: LocationOption;
   initialType?: RideType;
+  initialDistanceKm?: number;
   onTriggerSos: () => void;
   onTriggerFakeCall: () => void;
 }
@@ -35,12 +36,14 @@ export const RideBookingModal: React.FC<RideBookingModalProps> = ({
   initialPickup,
   initialDropoff,
   initialType = 'solo',
+  initialDistanceKm = 8.4,
   onTriggerSos,
   onTriggerFakeCall,
 }) => {
   const [pickup, setPickup] = useState<LocationOption>(initialPickup || POPULAR_LOCATIONS[0]);
   const [dropoff, setDropoff] = useState<LocationOption>(initialDropoff || POPULAR_LOCATIONS[1]);
   const [rideType, setRideType] = useState<RideType>(initialType);
+  const [distanceKm, setDistanceKm] = useState<number>(initialDistanceKm);
 
   // Flow states: 'config' | 'searching' | 'active_ride' | 'completed'
   const [flowState, setFlowState] = useState<'config' | 'searching' | 'active_ride' | 'completed'>('config');
@@ -61,18 +64,24 @@ export const RideBookingModal: React.FC<RideBookingModalProps> = ({
     if (initialPickup) setPickup(initialPickup);
     if (initialDropoff) setDropoff(initialDropoff);
     if (initialType) setRideType(initialType);
-  }, [initialPickup, initialDropoff, initialType, isOpen]);
+    if (initialDistanceKm) setDistanceKm(initialDistanceKm);
+  }, [initialPickup, initialDropoff, initialType, initialDistanceKm, isOpen]);
 
-  // Fare calculation
-  const distanceKm = 8.6;
-  const estimatedMin = 24;
-  const fareMap: Record<RideType, number> = {
-    solo: Math.round(35 + distanceKm * 8),
-    express: Math.round(45 + distanceKm * 9.5),
-    nightshield: Math.round(40 + distanceKm * 8.5),
-    ev: Math.round(35 + distanceKm * 7.5),
+  // Fare range & expected calculation based on distance and vehicle type
+  const estimatedMin = Math.max(5, Math.round((distanceKm / 24) * 60));
+
+  const vehicleRates: Record<RideType, { name: string; base: number; perKm: number; perMin: number }> = {
+    solo: { name: 'Sakhi Solo Standard', base: 30, perKm: 8.5, perMin: 1.2 },
+    ev: { name: 'Sakhi EV Eco-Glide', base: 28, perKm: 7.5, perMin: 1.0 },
+    nightshield: { name: 'NightShield Protected', base: 38, perKm: 9.0, perMin: 1.5 },
+    express: { name: 'Sakhi Priority Express', base: 42, perKm: 10.5, perMin: 1.8 },
   };
-  const totalFare = fareMap[rideType];
+
+  const currentRate = vehicleRates[rideType];
+  const expectedCost = Math.round(currentRate.base + (distanceKm * currentRate.perKm) + (estimatedMin * currentRate.perMin));
+  const minCost = Math.max(35, Math.round(expectedCost * 0.93));
+  const maxCost = Math.round(expectedCost * 1.07);
+  const totalFare = expectedCost;
 
   // Simulator loop when active_ride is running
   useEffect(() => {
@@ -206,92 +215,157 @@ export const RideBookingModal: React.FC<RideBookingModalProps> = ({
                 </div>
               </div>
 
-              {/* Ride Tiers */}
+              {/* Ride Tiers with Upfront Price Ranges */}
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-2">
-                  Select Commute Category
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-slate-700">
+                    Select Vehicle Type &amp; Upfront Range
+                  </label>
+                  <span className="text-[11px] font-mono text-slate-500">
+                    🛣️ {distanceKm} km · ~{estimatedMin} mins
+                  </span>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {/* Solo */}
-                  <button
-                    type="button"
-                    onClick={() => setRideType('solo')}
-                    className={`p-3 rounded-xl border text-left transition-all ${
-                      rideType === 'solo'
-                        ? 'border-rose-600 bg-rose-50/70 ring-1 ring-rose-600'
-                        : 'border-stone-200 bg-white hover:bg-stone-50'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-900">Sakhi Solo</span>
-                      <span className="text-xs font-bold text-rose-600 tabular-nums">₹{fareMap.solo}</span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      Standard verified woman captain with sanitized helmet & hairnet.
-                    </p>
-                  </button>
+                  {(() => {
+                    const rate = vehicleRates.solo;
+                    const exp = Math.round(rate.base + distanceKm * rate.perKm + estimatedMin * rate.perMin);
+                    const min = Math.max(35, Math.round(exp * 0.93));
+                    const max = Math.round(exp * 1.07);
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => setRideType('solo')}
+                        className={`p-3 rounded-xl border text-left transition-all ${
+                          rideType === 'solo'
+                            ? 'border-rose-600 bg-rose-50/70 ring-1 ring-rose-600'
+                            : 'border-stone-200 bg-white hover:bg-stone-50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-900">Sakhi Solo Standard</span>
+                          <span className="text-xs font-bold text-rose-600 font-mono tabular-nums">₹{min} - ₹{max}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Verified petrol/standard scooter (exp. ₹{exp}). Sanitized helmet.
+                        </p>
+                      </button>
+                    );
+                  })()}
 
                   {/* NightShield */}
-                  <button
-                    type="button"
-                    onClick={() => setRideType('nightshield')}
-                    className={`p-3 rounded-xl border text-left transition-all ${
-                      rideType === 'nightshield'
-                        ? 'border-rose-600 bg-rose-50/70 ring-1 ring-rose-600'
-                        : 'border-stone-200 bg-white hover:bg-stone-50'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-900 flex items-center gap-1">
-                        <span>NightShield</span>
-                        <Sparkles className="w-3 h-3 text-amber-500" />
-                      </span>
-                      <span className="text-xs font-bold text-rose-600 tabular-nums">₹{fareMap.nightshield}</span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      Active route deviation monitor + dual contact live SMS ping.
-                    </p>
-                  </button>
+                  {(() => {
+                    const rate = vehicleRates.nightshield;
+                    const exp = Math.round(rate.base + distanceKm * rate.perKm + estimatedMin * rate.perMin);
+                    const min = Math.max(35, Math.round(exp * 0.93));
+                    const max = Math.round(exp * 1.07);
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => setRideType('nightshield')}
+                        className={`p-3 rounded-xl border text-left transition-all ${
+                          rideType === 'nightshield'
+                            ? 'border-rose-600 bg-rose-50/70 ring-1 ring-rose-600'
+                            : 'border-stone-200 bg-white hover:bg-stone-50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-900 flex items-center gap-1">
+                            <span>NightShield</span>
+                            <Sparkles className="w-3 h-3 text-amber-500" />
+                          </span>
+                          <span className="text-xs font-bold text-rose-600 font-mono tabular-nums">₹{min} - ₹{max}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Active audio escort + dual contact live SMS ping (exp. ₹{exp}).
+                        </p>
+                      </button>
+                    );
+                  })()}
 
                   {/* Express */}
-                  <button
-                    type="button"
-                    onClick={() => setRideType('express')}
-                    className={`p-3 rounded-xl border text-left transition-all ${
-                      rideType === 'express'
-                        ? 'border-rose-600 bg-rose-50/70 ring-1 ring-rose-600'
-                        : 'border-stone-200 bg-white hover:bg-stone-50'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-900 flex items-center gap-1">
-                        <Zap className="w-3 h-3 text-amber-500" /> Sakhi Express
-                      </span>
-                      <span className="text-xs font-bold text-rose-600 tabular-nums">₹{fareMap.express}</span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      Priority dispatch for urgent peak-hour office and metro rushes.
-                    </p>
-                  </button>
+                  {(() => {
+                    const rate = vehicleRates.express;
+                    const exp = Math.round(rate.base + distanceKm * rate.perKm + estimatedMin * rate.perMin);
+                    const min = Math.max(35, Math.round(exp * 0.93));
+                    const max = Math.round(exp * 1.07);
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => setRideType('express')}
+                        className={`p-3 rounded-xl border text-left transition-all ${
+                          rideType === 'express'
+                            ? 'border-rose-600 bg-rose-50/70 ring-1 ring-rose-600'
+                            : 'border-stone-200 bg-white hover:bg-stone-50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-900 flex items-center gap-1">
+                            <Zap className="w-3 h-3 text-amber-500" /> Sakhi Express
+                          </span>
+                          <span className="text-xs font-bold text-rose-600 font-mono tabular-nums">₹{min} - ₹{max}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Under 2-min priority dispatch for urgent rushes (exp. ₹{exp}).
+                        </p>
+                      </button>
+                    );
+                  })()}
 
                   {/* EV Eco */}
-                  <button
-                    type="button"
-                    onClick={() => setRideType('ev')}
-                    className={`p-3 rounded-xl border text-left transition-all ${
-                      rideType === 'ev'
-                        ? 'border-rose-600 bg-rose-50/70 ring-1 ring-rose-600'
-                        : 'border-stone-200 bg-white hover:bg-stone-50'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-900">Sakhi EV Green</span>
-                      <span className="text-xs font-bold text-rose-600 tabular-nums">₹{fareMap.ev}</span>
+                  {(() => {
+                    const rate = vehicleRates.ev;
+                    const exp = Math.round(rate.base + distanceKm * rate.perKm + estimatedMin * rate.perMin);
+                    const min = Math.max(35, Math.round(exp * 0.93));
+                    const max = Math.round(exp * 1.07);
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => setRideType('ev')}
+                        className={`p-3 rounded-xl border text-left transition-all ${
+                          rideType === 'ev'
+                            ? 'border-rose-600 bg-rose-50/70 ring-1 ring-rose-600'
+                            : 'border-stone-200 bg-white hover:bg-stone-50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-900">Sakhi EV Green</span>
+                          <span className="text-xs font-bold text-rose-600 font-mono tabular-nums">₹{min} - ₹{max}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          100% silent electric scooter (Ather/Ola) (exp. ₹{exp}).
+                        </p>
+                      </button>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* Upfront Fare Range Banner before Confirmation */}
+              <div className="p-3.5 bg-stone-900 text-stone-200 rounded-xl space-y-1.5">
+                <div className="flex items-baseline justify-between">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-stone-400 tracking-wider block">
+                      Estimated Fare Range ({currentRate.name})
+                    </span>
+                    <div className="text-xl font-bold font-mono text-white tabular-nums">
+                      ₹{minCost} - ₹{maxCost}{' '}
+                      <span className="text-xs font-normal text-stone-400 font-sans">
+                        (Expected: ₹{expectedCost})
+                      </span>
                     </div>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      100% silent electric scooter commute (Ather / Ola / TVS).
-                    </p>
-                  </button>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xs font-mono text-emerald-400 font-semibold block">
+                      ~{estimatedMin} mins
+                    </span>
+                    <span className="text-[10px] text-stone-400">{distanceKm} km route</span>
+                  </div>
+                </div>
+                <div className="text-[10px] text-stone-400 pt-1 border-t border-stone-800 flex items-center justify-between">
+                  <span>Base: ₹{currentRate.base} + ₹{currentRate.perKm}/km + ₹{currentRate.perMin}/min</span>
+                  <span className="text-emerald-300">Zero Surge Price Guarantee</span>
                 </div>
               </div>
 
@@ -320,11 +394,11 @@ export const RideBookingModal: React.FC<RideBookingModalProps> = ({
               {/* Action */}
               <div className="pt-2 flex items-center justify-between">
                 <div>
-                  <div className="text-[11px] text-slate-500">Total All-Inclusive Fare</div>
-                  <div className="text-xl font-bold text-slate-900 tabular-nums">
-                    ₹{totalFare}{' '}
-                    <span className="text-xs font-normal text-slate-500">
-                      (~{estimatedMin} mins · {distanceKm} km)
+                  <div className="text-[11px] text-slate-500">Upfront Price Range</div>
+                  <div className="text-lg font-bold text-slate-900 font-mono tabular-nums">
+                    ₹{minCost} - ₹{maxCost}{' '}
+                    <span className="text-xs font-normal text-slate-500 font-sans">
+                      (exp. ₹{expectedCost})
                     </span>
                   </div>
                 </div>
@@ -334,7 +408,7 @@ export const RideBookingModal: React.FC<RideBookingModalProps> = ({
                   onClick={handleStartBooking}
                   className="px-6 py-3 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-semibold text-sm rounded-xl shadow-md transition-all flex items-center gap-2"
                 >
-                  <span>Confirm Ride</span>
+                  <span>Confirm Ride Range</span>
                 </button>
               </div>
             </div>

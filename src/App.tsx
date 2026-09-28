@@ -18,15 +18,19 @@ export default function App() {
   const [bookingPickup, setBookingPickup] = useState<LocationOption | undefined>(undefined);
   const [bookingDropoff, setBookingDropoff] = useState<LocationOption | undefined>(undefined);
   const [bookingType, setBookingType] = useState<RideType>('solo');
+  const [bookingDistanceKm, setBookingDistanceKm] = useState<number>(8.4);
 
   const [sosOpen, setSosOpen] = useState<boolean>(false);
   const [fakeCallOpen, setFakeCallOpen] = useState<boolean>(false);
   const [hotlinesOpen, setHotlinesOpen] = useState<boolean>(false);
 
-  const handleStartBooking = (pickup: LocationOption, dropoff: LocationOption, type: RideType) => {
+  const handleStartBooking = (pickup: LocationOption, dropoff: LocationOption, type: RideType, customDistance?: number) => {
     setBookingPickup(pickup);
     setBookingDropoff(dropoff);
     setBookingType(type);
+    if (customDistance) {
+      setBookingDistanceKm(customDistance);
+    }
     setBookingOpen(true);
   };
 
@@ -97,6 +101,7 @@ export default function App() {
         initialPickup={bookingPickup}
         initialDropoff={bookingDropoff}
         initialType={bookingType}
+        initialDistanceKm={bookingDistanceKm}
         onTriggerSos={() => setSosOpen(true)}
         onTriggerFakeCall={() => setFakeCallOpen(true)}
       />
